@@ -21,22 +21,25 @@ package sh.nerd.async.process;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
-import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.concurrent.CompletableFuture.runAsync;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.time.Duration;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * Class that creates an async process
@@ -44,6 +47,7 @@ import java.util.function.Function;
 public class AsyncProcess {
 
   private final String[] command;
+  private final Optional<Supplier<String>> inSupplier;
   private final Optional<Consumer<String>> outConsumer;
   private final Optional<Consumer<String>> errConsumer;
   private final Function<Runnable, CompletionStage<Void>> runner;
@@ -52,16 +56,19 @@ public class AsyncProcess {
    * C'tor
    *
    * @param cmd command to run
+   * @param in  supplier fro std in
    * @param out consumer for std out
    * @param err consumer for std err
    * @param exe the executor to run futures on
    */
   AsyncProcess(final String[] cmd,
+               final Supplier<String> in,
                final Consumer<String> out,
                final Consumer<String> err,
                final Executor exe) {
 
     command = cmd;
+    inSupplier = Optional.ofNullable(in);
     outConsumer = Optional.ofNullable(out);
     errConsumer = Optional.ofNullable(err);
     runner = isNull(exe) ? CompletableFuture::runAsync : runnable -> runAsync(runnable, exe);
@@ -73,12 +80,50 @@ public class AsyncProcess {
    */
   public Result start() throws IOException {
     final Process exec = Runtime.getRuntime().exec(command);
+    final Function<Supplier<String>, CompletionStage<Void>> in = redirect(exec.getOutputStream());
     final Function<Consumer<String>, CompletionStage<Void>> out = redirect(exec.getInputStream());
     final Function<Consumer<String>, CompletionStage<Void>> err = redirect(exec.getErrorStream());
-    final Result result = Result.of(exec, out, err, runner);
-    outConsumer.ifPresent(result::onOut);
-    errConsumer.ifPresent(result::onErr);
+    final Result result = Result.of(exec, in, out, err, runner);
+    inSupplier.ifPresent(result::in);
+    outConsumer.ifPresent(result::out);
+    errConsumer.ifPresent(result::err);
     return result;
+  }
+
+  private Function<Supplier<String>, CompletionStage<Void>> redirect(final OutputStream stream) {
+    return supplier -> {
+      final CompletableFuture<Void> future = new CompletableFuture<>();
+      runner.apply(
+          () -> {
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream))) {
+              try {
+                produce(supplier, writer);
+              } catch (UncheckedIOException e) {
+                // do nothing
+              } finally {
+                future.complete(null);
+              }
+            } catch (IOException e) {
+              future.completeExceptionally(e);
+            }
+          }
+      );
+      return future;
+    };
+  }
+
+  private void produce(final Supplier<String> supplier, final BufferedWriter writer) {
+    Stream.generate(supplier)
+        .filter(Objects::nonNull)
+        .forEachOrdered(string -> {
+          try {
+            writer.write(string);
+            writer.newLine();
+            writer.flush();
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        });
   }
 
 
@@ -122,7 +167,7 @@ public class AsyncProcess {
    * Run a command
    */
   public static Result run(final Consumer<String> out, final String... cmd) throws IOException {
-    return new Builder().cmd(cmd).onOut(out).start();
+    return new Builder().cmd(cmd).out(out).start();
   }
 
   /**
@@ -131,123 +176,17 @@ public class AsyncProcess {
   public static Result run(final Consumer<String> out,
                            final Consumer<String> err,
                            final String... cmd) throws IOException {
-    return new Builder().cmd(cmd).onOut(out).onErr(err).start();
+    return new Builder().cmd(cmd).out(out).err(err).start();
   }
 
   /**
-   * Wrapper for a spawned process.
+   * Run a command
    */
-  static class Result {
-
-    private AtomicBoolean outAttached = new AtomicBoolean(false);
-    private AtomicBoolean errAttached = new AtomicBoolean(false);
-
-    private final Process p;
-    private final Function<Consumer<String>, CompletionStage<Void>> out;
-    private final Function<Consumer<String>, CompletionStage<Void>> err;
-    private final Function<Runnable, CompletionStage<Void>> runner;
-
-    /**
-     * Constructor
-     */
-    static Result of(final Process p,
-                     final Function<Consumer<String>, CompletionStage<Void>> out,
-                     final Function<Consumer<String>, CompletionStage<Void>> err,
-                     final Function<Runnable, CompletionStage<Void>> runner) {
-      return new Result(p, out, err, runner);
-    }
-
-    private Result(final Process p,
-                   final Function<Consumer<String>, CompletionStage<Void>> out,
-                   final Function<Consumer<String>, CompletionStage<Void>> err,
-                   final Function<Runnable, CompletionStage<Void>> runner) {
-
-      this.p = p;
-      this.out = out;
-      this.err = err;
-      this.runner = runner;
-    }
-
-    /**
-     * Waits for process to finish.
-     *
-     * @return exit code for process
-     */
-    public CompletionStage<Integer> waitFor() {
-      final CompletableFuture<Integer> future = new CompletableFuture<>();
-      runner.apply(() -> {
-        try {
-          future.complete(p.waitFor());
-        } catch (InterruptedException e) {
-          future.completeExceptionally(e);
-        }
-      });
-      return future;
-    }
-
-    /**
-     * Wait for process finish for duration
-     *
-     * @param duration time to wait for
-     * @return true or false depending on if process terminated by itself or not.
-     */
-    public CompletionStage<Boolean> waitFor(final Duration duration) {
-      final CompletableFuture<Boolean> future = new CompletableFuture<>();
-      runner.apply(() -> {
-        try {
-          future.complete(p.waitFor(duration.getSeconds(), TimeUnit.SECONDS));
-        } catch (InterruptedException e) {
-          future.completeExceptionally(e);
-        }
-      });
-      return future;
-    }
-
-    /**
-     * Sets the consumer to feed data to when standard out has data.
-     *
-     * @param consumer called for each line in output
-     * @return a result
-     */
-    public Result onOut(final Consumer<String> consumer) {
-      if (outAttached.compareAndSet(false, true)) {
-        out.apply(requireNonNull(consumer));
-        return this;
-      } else {
-        throw new IllegalStateException("StdOut consumer already attached");
-      }
-    }
-
-    /**
-     * Sets the consumer to feed data to when standard error has data.
-     *
-     * @param consumer called for each line in output
-     * @return a result
-     */
-    public Result onErr(final Consumer<String> consumer) {
-      if (errAttached.compareAndSet(false, true)) {
-        err.apply(requireNonNull(consumer));
-        return this;
-      } else {
-        throw new IllegalStateException("StdOut consumer already attached");
-      }
-    }
-
-    /**
-     * Underlying access to the process wrapped in a completionstage.
-     * Note that all operations done on the process are not asynchronous unless you yourself
-     * wrap it in async operations
-     */
-    public CompletionStage<Process> process() {
-      return completedFuture(p);
-    }
-
-    /**
-     * Async destroy process.
-     */
-    public CompletionStage<Void> destroy() {
-      return runner.apply(p::destroy);
-    }
+  public static Result run(final Supplier<String> in,
+                           final Consumer<String> out,
+                           final Consumer<String> err,
+                           final String... cmd) throws IOException {
+    return new Builder().cmd(cmd).in(in).out(out).err(err).start();
   }
 
 
@@ -255,39 +194,46 @@ public class AsyncProcess {
    * Builder for async process. Shouldn't be created by the user.
    * Rather use {@link AsyncProcess#cmd(String...)}
    */
-  static class Builder {
+  static class Builder implements Communicable<Builder> {
 
+    private Supplier<String> inSupplier;
     private Consumer<String> outConsumer;
     private Consumer<String> errConsumer;
     private String[] command;
     private Executor executor;
 
     /**
-     * Sets the consumer to feed data to when standard out has data.
-     *
-     * @param consumer called for each line in output
-     * @return a builder
+     * {@inheritDoc}
      */
-    public Builder onOut(final Consumer<String> consumer) {
+    @Override
+    public Builder out(final Consumer<String> consumer) {
       outConsumer = requireNonNull(consumer);
       return this;
     }
 
     /**
-     * Sets the consumer to feed data to when standard error has data.
-     *
-     * @param consumer called for each line in output
-     * @return a builder
+     * {@inheritDoc}
      */
-    public Builder onErr(final Consumer<String> consumer) {
+    @Override
+    public Builder err(final Consumer<String> consumer) {
       errConsumer = requireNonNull(consumer);
+      return this;
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Builder in(final Supplier<String> supplier) {
+      inSupplier = requireNonNull(supplier);
       return this;
     }
 
     /**
      * Set the command to execute.
      *
-     * @param cmd command to execute
+     * @param cmd the command to execute
      */
     public Builder cmd(final String... cmd) {
       command = requireNonNull(cmd);
@@ -311,9 +257,10 @@ public class AsyncProcess {
      * @return a {@link Result} object.
      */
     public Result start() throws IOException {
-      return new AsyncProcess(command, outConsumer, errConsumer, executor).start();
+      return new AsyncProcess(command, inSupplier, outConsumer, errConsumer, executor).start();
     }
 
   }
+
 
 }

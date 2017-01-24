@@ -27,20 +27,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static sh.nerd.async.process.AsyncProcess.*;
+import static sh.nerd.async.process.AsyncProcess.Builder;
+import static sh.nerd.async.process.AsyncProcess.cmd;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import sh.nerd.async.process.AsyncProcess.Result;
 
 class AsyncProcessTest {
 
@@ -49,14 +53,14 @@ class AsyncProcessTest {
     assertAll("Consumers",
         () -> {
           final Map.Entry<CountDownLatch, Consumer<String>> latchCons = latchWithConsumer(1);
-          cmd("echo", "foo").start().onOut(latchCons.getValue()).waitFor()
+          cmd("echo", "foo").start().out(latchCons.getValue()).waitFor()
               .toCompletableFuture()
               .join();
           assertTrue(latchCons.getKey().getCount() == 0, "Stdout counsumer was never called");
         },
         () -> {
           final Map.Entry<CountDownLatch, Consumer<String>> latchCons = latchWithConsumer(2);
-          cmd("echo", "-e", "foo\nbar").start().onOut(latchCons.getValue()).waitFor()
+          cmd("echo", "-e", "foo\nbar").start().out(latchCons.getValue()).waitFor()
               .toCompletableFuture()
               .join();
           assertTrue(latchCons.getKey().getCount() == 0,
@@ -69,10 +73,13 @@ class AsyncProcessTest {
   void builderShouldThrowOnNull() {
     assertAll("Builder values can't be set to null",
         () -> assertThrows(NullPointerException.class,
-            () -> new Builder().onOut(null)
+            () -> new Builder().in(null)
         ),
         () -> assertThrows(NullPointerException.class,
-            () -> new Builder().onErr(null)
+            () -> new Builder().out(null)
+        ),
+        () -> assertThrows(NullPointerException.class,
+            () -> new Builder().err(null)
         ),
         () -> assertThrows(NullPointerException.class,
             () -> new Builder().cmd(null)
@@ -87,10 +94,10 @@ class AsyncProcessTest {
     };
     assertAll("Result consumers can only be set once",
         () -> assertThrows(IllegalStateException.class,
-            () -> Result.of(null, std, std, null).onOut(nothing).onOut(nothing)
+            () -> Result.of(null, null, std, std, null).out(nothing).out(nothing)
         ),
         () -> assertThrows(IllegalStateException.class,
-            () -> Result.of(null, std, std, null).onErr(nothing).onErr(nothing)
+            () -> Result.of(null, null, std, std, null).err(nothing).err(nothing)
         )
     );
   }
@@ -130,7 +137,7 @@ class AsyncProcessTest {
       }
     };
     final Function<Runnable, CompletionStage<Void>> runner = CompletableFuture::runAsync;
-    final CompletionStage<Integer> p = Result.of(process, null, null, runner).waitFor();
+    final CompletionStage<Integer> p = Result.of(process, null, null, null, runner).waitFor();
     p.handle((result, exc) -> {
           assertNotNull(exc);
           assertTrue(exc instanceof InterruptedException);
@@ -178,7 +185,7 @@ class AsyncProcessTest {
     };
     final Function<Runnable, CompletionStage<Void>> runner = CompletableFuture::runAsync;
 
-    final CompletableFuture<Integer> p = Result.of(process, null, null, runner)
+    final CompletableFuture<Integer> p = Result.of(process, null, null, null, runner)
         .waitFor()
         .toCompletableFuture();
     assertFalse(p.isDone());
@@ -197,4 +204,35 @@ class AsyncProcessTest {
     assertTrue(cmd("a", "b") instanceof Builder);
   }
 
+
+  @Test
+  void shouldBeAbleToFeedDataOnStdIn() throws IOException, InterruptedException {
+    final String something = "Something";
+    final Result start =
+        AsyncProcess.cmd("/bin/bash", "-c", "cat -")
+            .start();
+
+    final AtomicBoolean sent = new AtomicBoolean(false);
+    final CountDownLatch called = new CountDownLatch(1);
+
+    final Supplier<String> in = () -> {
+      if (sent.compareAndSet(false, true)) {
+        return something;
+      }
+      return null;
+    };
+
+    final Consumer<String> out = o -> {
+      System.out.println("Got value from stdin: " + o);
+      start.destroy().toCompletableFuture().join();
+      called.countDown();
+    };
+
+    start.in(in).out(out);
+    called.await();
+    start.waitFor(Duration.ofSeconds(5))
+        .thenAccept(Assertions::assertTrue)
+        .toCompletableFuture()
+        .join();
+  }
 }
