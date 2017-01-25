@@ -98,8 +98,14 @@ public class AsyncProcess {
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream))) {
               try {
                 produce(supplier, writer);
+                future.complete(null);
               } catch (UncheckedIOException e) {
-                // do nothing
+                // TODO: this is wrong, we need to expose a way for the user to singal end of
+                // stdin. THe exception handling here is also broken. Needs tests and we should
+                // also make sure to join the returned completablefuture that is return from this
+                // fuction.
+                // Maybe supplier is not the way to go. Stream.generate creates an infinite stream,
+                // which is not really what we want. Maybe we should just expose an async writer.
               } finally {
                 future.complete(null);
               }
@@ -113,6 +119,10 @@ public class AsyncProcess {
   }
 
   private void produce(final Supplier<String> supplier, final BufferedWriter writer) {
+    /*
+    If we continue to expose a supplier, we probably want the user to block in their supplier
+    until they have data to give us and send us a null when they want us to stop.
+     */
     Stream.generate(supplier)
         .filter(Objects::nonNull)
         .forEachOrdered(string -> {
