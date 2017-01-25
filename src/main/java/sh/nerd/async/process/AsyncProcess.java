@@ -21,7 +21,12 @@ package sh.nerd.async.process;
 
 import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
+import static java.util.Spliterator.NONNULL;
+import static java.util.Spliterator.ORDERED;
+import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.concurrent.CompletableFuture.runAsync;
+import static java.util.stream.StreamSupport.stream;
+import static sh.nerd.async.process.SupplierIterator.supplyUntilNull;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -31,7 +36,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -39,7 +43,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 /**
  * Class that creates an async process
@@ -121,20 +124,21 @@ public class AsyncProcess {
 
   private void produce(final Supplier<String> supplier, final BufferedWriter writer) {
     /*
-    If we continue to expose a supplier, we probably want the user to block in their supplier
-    until they have data to give us and send us a null when they want us to stop.
+    TODO: Document that the user should block their supplier until they have an element and return
+    TODO: null when they no longer wants to supply a value.
      */
-    Stream.generate(supplier)
-        .filter(Objects::nonNull)
-        .forEachOrdered(string -> {
-          try {
-            writer.write(string);
-            writer.newLine();
-            writer.flush();
-          } catch (IOException e) {
-            throw new UncheckedIOException(e);
-          }
-        });
+    stream(spliteratorUnknownSize(supplyUntilNull(supplier), ORDERED | NONNULL), false)
+        .forEachOrdered(
+            string -> {
+              try {
+                writer.write(string);
+                writer.newLine();
+                writer.flush();
+              } catch (IOException e) {
+                throw new UncheckedIOException(e);
+              }
+            }
+        );
   }
 
 
