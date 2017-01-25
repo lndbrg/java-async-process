@@ -50,6 +50,7 @@ class AsyncProcessTest {
 
   @Test
   void start() throws IOException {
+    // These tests are non-deterministic since we never join the futures that consumes.
     assertAll("Consumers",
         () -> {
           final Map.Entry<CountDownLatch, Consumer<String>> latchCons = latchWithConsumer(1);
