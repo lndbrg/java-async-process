@@ -71,6 +71,7 @@ public class AsyncProcess {
     inSupplier = Optional.ofNullable(in);
     outConsumer = Optional.ofNullable(out);
     errConsumer = Optional.ofNullable(err);
+    //TODO: create our own executor if not provided.
     runner = isNull(exe) ? CompletableFuture::runAsync : runnable -> runAsync(runnable, exe);
 
   }

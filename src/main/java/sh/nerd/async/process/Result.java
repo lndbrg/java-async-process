@@ -41,6 +41,10 @@ class Result implements Communicable<Result> {
   private AtomicBoolean errAttached = new AtomicBoolean(false);
 
   private final Process p;
+  /*
+  TODO: Save the result of this function application and join the completionstages when we call
+  waitFor();
+   */
   private final Function<Supplier<String>, CompletionStage<Void>> in;
   private final Function<Consumer<String>, CompletionStage<Void>> out;
   private final Function<Consumer<String>, CompletionStage<Void>> err;
@@ -79,6 +83,7 @@ class Result implements Communicable<Result> {
     final CompletableFuture<Integer> future = new CompletableFuture<>();
     runner.apply(() -> {
       try {
+        // TODO:We should join the completionsstages of in/out/err here.
         future.complete(p.waitFor());
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
@@ -97,6 +102,7 @@ class Result implements Communicable<Result> {
     final CompletableFuture<Boolean> future = new CompletableFuture<>();
     runner.apply(() -> {
       try {
+        // TODO:We should join the completionsstages of in/out/err here.
         future.complete(p.waitFor(duration.getSeconds(), TimeUnit.SECONDS));
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
