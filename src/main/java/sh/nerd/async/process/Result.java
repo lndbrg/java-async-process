@@ -83,8 +83,8 @@ class Result implements Communicable<Result> {
     final CompletableFuture<Integer> future = new CompletableFuture<>();
     runner.apply(() -> {
       try {
-        // TODO:We should join the completionsstages of in/out/err here.
         future.complete(p.waitFor());
+        // TODO:We should join the completionsstages of in/out/err in a finally block;
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
       }
@@ -102,7 +102,7 @@ class Result implements Communicable<Result> {
     final CompletableFuture<Boolean> future = new CompletableFuture<>();
     runner.apply(() -> {
       try {
-        // TODO:We should join the completionsstages of in/out/err here.
+        // TODO:We should join the completionsstages of in/out/err in a finally block;
         future.complete(p.waitFor(duration.getSeconds(), TimeUnit.SECONDS));
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
