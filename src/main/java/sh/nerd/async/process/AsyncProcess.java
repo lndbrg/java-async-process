@@ -78,10 +78,10 @@ public class AsyncProcess {
     inSupplier = Optional.ofNullable(in);
     outConsumer = Optional.ofNullable(out);
     errConsumer = Optional.ofNullable(err);
-    runner = isNull(exe)
-             ? r -> runAsync(r, newFixedThreadPool(NUM_THREADS, withPrefix(THREAD_PREFIX)))
-             : r -> runAsync(r, exe);
-
+    final Executor executor = isNull(exe)
+                              ? newFixedThreadPool(NUM_THREADS, withPrefix(THREAD_PREFIX))
+                              : exe;
+    runner = runnable -> runAsync(runnable, executor);
   }
 
   /**
