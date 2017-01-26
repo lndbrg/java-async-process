@@ -25,7 +25,7 @@ import static java.util.Spliterator.NONNULL;
 import static java.util.Spliterator.ORDERED;
 import static java.util.Spliterators.spliteratorUnknownSize;
 import static java.util.concurrent.CompletableFuture.runAsync;
-import static java.util.concurrent.Executors.newFixedThreadPool;
+import static java.util.concurrent.Executors.newCachedThreadPool;
 import static java.util.stream.StreamSupport.stream;
 import static sh.nerd.async.process.NamedThreadFactory.withPrefix;
 import static sh.nerd.async.process.SupplierIterator.supplyUntilNull;
@@ -57,7 +57,6 @@ public class AsyncProcess {
   private final Optional<Consumer<String>> errConsumer;
   private final Function<Runnable, CompletionStage<Void>> runner;
   private final static String THREAD_PREFIX = "async-process";
-  private final static int NUM_THREADS = 3;
 
   /**
    * C'tor
@@ -79,7 +78,7 @@ public class AsyncProcess {
     outConsumer = Optional.ofNullable(out);
     errConsumer = Optional.ofNullable(err);
     final Executor executor = isNull(exe)
-                              ? newFixedThreadPool(NUM_THREADS, withPrefix(THREAD_PREFIX))
+                              ? newCachedThreadPool(withPrefix(THREAD_PREFIX))
                               : exe;
     runner = runnable -> runAsync(runnable, executor);
   }
