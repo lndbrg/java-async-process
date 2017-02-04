@@ -90,21 +90,24 @@ class AsyncProcessTest {
 
   @Test
   void resultShouldThrowOnMultipleConsumers() {
-    Function<Consumer<String>, CompletionStage<Void>> std = cons -> completedFuture(null);
+    final Function<Consumer<String>, CompletionStage<Void>> std = cons -> completedFuture(null);
+    final Function<Supplier<String>, CompletionStage<Void>> in = sup -> completedFuture(null);
     Consumer<String> nothing = line -> {
     };
     assertAll("Result consumers can only be set once",
         () -> assertThrows(IllegalStateException.class,
-            () -> Result.of(null, null, std, std, null).out(nothing).out(nothing)
+            () -> Result.of(null, in, std, std, null).out(nothing).out(nothing)
         ),
         () -> assertThrows(IllegalStateException.class,
-            () -> Result.of(null, null, std, std, null).err(nothing).err(nothing)
+            () -> Result.of(null, in, std, std, null).err(nothing).err(nothing)
         )
     );
   }
 
   @Test
   void waitForShouldSetFutureToExceptionalOnInterruptedException() {
+    final Function<Consumer<String>, CompletionStage<Void>> std = cons -> completedFuture(null);
+    final Function<Supplier<String>, CompletionStage<Void>> in = sup -> completedFuture(null);
     final Process process = new Process() {
 
       @Override
@@ -138,7 +141,7 @@ class AsyncProcessTest {
       }
     };
     final Function<Runnable, CompletionStage<Void>> runner = CompletableFuture::runAsync;
-    final CompletionStage<Integer> p = Result.of(process, null, null, null, runner).waitFor();
+    final CompletionStage<Integer> p = Result.of(process, in, std, std, runner).waitFor();
     p.handle((result, exc) -> {
           assertNotNull(exc);
           assertTrue(exc instanceof InterruptedException);
@@ -150,6 +153,8 @@ class AsyncProcessTest {
 
   @Test
   void waitForShouldCompleteFutureWhenDoneRunning() throws InterruptedException {
+    final Function<Consumer<String>, CompletionStage<Void>> std = cons -> completedFuture(null);
+    final Function<Supplier<String>, CompletionStage<Void>> in = sup -> completedFuture(null);
     final CountDownLatch blocker = new CountDownLatch(1);
     final Process process = new Process() {
 
@@ -186,7 +191,7 @@ class AsyncProcessTest {
     };
     final Function<Runnable, CompletionStage<Void>> runner = CompletableFuture::runAsync;
 
-    final CompletableFuture<Integer> p = Result.of(process, null, null, null, runner)
+    final CompletableFuture<Integer> p = Result.of(process, in, std, std, runner)
         .waitFor()
         .toCompletableFuture();
     assertFalse(p.isDone());
