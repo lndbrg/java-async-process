@@ -19,10 +19,14 @@
  */
 package sh.nerd.async.process;
 
+import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static java.util.stream.Collectors.toList;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -30,21 +34,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * Wrapper for a spawned process.
  */
 class Result implements Communicable<Result> {
 
-  private AtomicBoolean inAttached = new AtomicBoolean(false);
-  private AtomicBoolean outAttached = new AtomicBoolean(false);
-  private AtomicBoolean errAttached = new AtomicBoolean(false);
+  private final static Consumer<String> NO_OP_CONUMER = ingored -> {
+  };
+  private final static Supplier<String> NULL_SUPPLIER = () -> null;
+
+  private final AtomicBoolean inAttached = new AtomicBoolean(false);
+  private final AtomicBoolean outAttached = new AtomicBoolean(false);
+  private final AtomicBoolean errAttached = new AtomicBoolean(false);
 
   private final Process p;
-  /*
-  TODO: Save the result of this function application and join the completionstages when we call
-  waitFor();
-   */
+
+  private CompletionStage<Void> inRunner;
+  private CompletionStage<Void> outRunner;
+  private CompletionStage<Void> errRunner;
   private final Function<Supplier<String>, CompletionStage<Void>> in;
   private final Function<Consumer<String>, CompletionStage<Void>> out;
   private final Function<Consumer<String>, CompletionStage<Void>> err;
@@ -81,12 +90,14 @@ class Result implements Communicable<Result> {
    */
   public CompletionStage<Integer> waitFor() {
     final CompletableFuture<Integer> future = new CompletableFuture<>();
+    final CompletableFuture<Void> runners = collectRunners();
     runner.apply(() -> {
       try {
         future.complete(p.waitFor());
-        // TODO:We should join the completionsstages of in/out/err in a finally block;
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
+      } finally {
+        runners.join();
       }
     });
     return future;
@@ -100,15 +111,35 @@ class Result implements Communicable<Result> {
    */
   public CompletionStage<Boolean> waitFor(final Duration duration) {
     final CompletableFuture<Boolean> future = new CompletableFuture<>();
+    final CompletableFuture<Void> runners = collectRunners();
     runner.apply(() -> {
       try {
-        // TODO:We should join the completionsstages of in/out/err in a finally block;
         future.complete(p.waitFor(duration.getSeconds(), TimeUnit.SECONDS));
       } catch (InterruptedException e) {
         future.completeExceptionally(e);
+      } finally {
+        runners.join();
       }
     });
     return future;
+  }
+
+  private CompletableFuture<Void> collectRunners() {
+    if (isNull(inRunner)) {
+      in(NULL_SUPPLIER);
+    }
+
+    if (isNull(outRunner)) {
+      out(NO_OP_CONUMER);
+    }
+
+    if (isNull(errRunner)) {
+      err(NO_OP_CONUMER);
+    }
+
+    final List<CompletableFuture<Void>> collect = Stream.of(inRunner, outRunner, errRunner)
+        .map(CompletionStage::toCompletableFuture).collect(toList());
+    return allOf(collect.toArray(new CompletableFuture[collect.size()]));
   }
 
   /**
@@ -118,7 +149,7 @@ class Result implements Communicable<Result> {
   public Result out(final Consumer<String> consumer) {
     requireNonNull(consumer);
     if (outAttached.compareAndSet(false, true)) {
-      out.apply(consumer);
+      outRunner = out.apply(consumer);
       return this;
     } else {
       throw new IllegalStateException("StdOut consumer already attached");
@@ -133,7 +164,7 @@ class Result implements Communicable<Result> {
   public Result err(final Consumer<String> consumer) {
     requireNonNull(consumer);
     if (errAttached.compareAndSet(false, true)) {
-      err.apply(consumer);
+      errRunner = err.apply(consumer);
       return this;
     } else {
       throw new IllegalStateException("StdErr consumer already attached");
@@ -147,7 +178,7 @@ class Result implements Communicable<Result> {
   public Result in(final Supplier<String> supplier) {
     requireNonNull(supplier);
     if (inAttached.compareAndSet(false, true)) {
-      in.apply(supplier);
+      inRunner = in.apply(supplier);
       return this;
     } else {
       throw new IllegalStateException("StdIn producer already attached");
