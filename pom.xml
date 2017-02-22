@@ -11,7 +11,7 @@
 
     <groupId>sh.nerd</groupId>
     <artifactId>async-process</artifactId>
-    <version>0.3</version>
+    <version>0.4-SNAPSHOT</version>
 
     <name>Async Process</name>
     <description>Library for wrapping process execution in Completable Futures</description>
@@ -29,7 +29,7 @@
         <connection>scm:git:git@github.com:lndbrg/java-async-process</connection>
         <developerConnection>scm:git:git@github.com:lndbrg/java-async-process</developerConnection>
         <url>https://github.com/lndbrg/java-async-process</url>
-        <tag>0.3</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <developers>
