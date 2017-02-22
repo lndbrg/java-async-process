@@ -202,7 +202,7 @@ public class AsyncProcess {
    * Builder for async process. Shouldn't be created by the user.
    * Rather use {@link AsyncProcess#cmd(String...)}
    */
-  static class Builder implements Communicable<Builder> {
+  public static class Builder implements Communicable<Builder> {
 
     private Supplier<String> inSupplier;
     private Consumer<String> outConsumer;
