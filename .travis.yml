@@ -1,5 +1,9 @@
 language: java
+sudo: false
+
 jdk:
   - oraclejdk8
 script:
-  - mvn verify
+  - mvn verify -Pcoverage
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
