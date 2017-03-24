@@ -33,8 +33,11 @@ import static sh.nerd.async.process.AsyncProcess.cmd;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.AbstractMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -240,5 +243,38 @@ class AsyncProcessTest {
         .thenAccept(Assertions::assertTrue)
         .toCompletableFuture()
         .join();
+  }
+
+  @Test
+  void shouldSetEnvironmentCorrectly() throws Exception {
+    final CountDownLatch called = new CountDownLatch(1);
+    final String expected = "FOO=BARBAZ=QUUX";
+    final LinkedHashMap<String, String> map = new LinkedHashMap<>();
+    map.put("FOO", "BAR");
+    map.put("BAZ", "QUUX");
+    final StringBuilder result = new StringBuilder();
+    AsyncProcess.cmd("env").env(map).out(out -> {
+      result.append(out);
+      called.countDown();
+    }).start().waitFor().toCompletableFuture().join();
+    called.await();
+    assertEquals(expected, result.toString());
+  }
+
+  @Test
+  void shouldSetCwdCorrectly() throws Exception {
+    final CountDownLatch called = new CountDownLatch(1);
+    final StringBuilder result = new StringBuilder();
+    final Path path = Files.createTempDirectory("async-process");
+    try {
+      AsyncProcess.cmd("pwd").cwd(path.toFile()).out(out -> {
+        result.append(out);
+        called.countDown();
+      }).start().waitFor().toCompletableFuture().join();
+      called.await();
+      assertEquals(path.toRealPath().toString(), result.toString());
+    } finally {
+      Files.delete(path);
+    }
   }
 }
