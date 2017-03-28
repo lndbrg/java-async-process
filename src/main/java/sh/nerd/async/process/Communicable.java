@@ -30,6 +30,18 @@ import java.util.function.Supplier;
 interface Communicable<T> {
 
   /**
+   * Sets the supplier that feeds data in to the process.
+   *
+   * The supplier is expected to produce lines without line endings, each supplied line is
+   * fed into the buffer of the process, a platform specific new line is added and the buffer
+   * is then flushed.
+   *
+   * @param supplier the supplier of the lines.
+   * @return an instance of type T
+   */
+  T in(final Supplier<String> supplier);
+
+  /**
    * Sets the consumer to feed data to when standard out has data.
    *
    * @param consumer called for each line in output
@@ -44,16 +56,4 @@ interface Communicable<T> {
    * @return an instance of type T
    */
   T err(final Consumer<String> consumer);
-
-  /**
-   * Sets the supplier that feeds data in to the process.
-   *
-   * The supplier is expected to produce lines without line endings, each supplied line is
-   * fed into the buffer of the process, a platform specific new line is added and the buffer
-   * is then flushed.
-   *
-   * @param supplier the supplier of the lines.
-   * @return an instance of type T
-   */
-  T in(final Supplier<String> supplier);
 }

@@ -32,12 +32,14 @@ import static sh.nerd.async.process.SupplierIterator.supplyUntilNull;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -55,6 +57,8 @@ public class AsyncProcess {
   private final Optional<Supplier<String>> inSupplier;
   private final Optional<Consumer<String>> outConsumer;
   private final Optional<Consumer<String>> errConsumer;
+  private final Map<String, String> environment;
+  private final File path;
   private final Function<Runnable, CompletionStage<Void>> runner;
   private final static String THREAD_PREFIX = "async-process";
 
@@ -71,12 +75,16 @@ public class AsyncProcess {
                final Supplier<String> in,
                final Consumer<String> out,
                final Consumer<String> err,
+               final Map<String, String> env,
+               final File cwd,
                final Executor exe) {
 
     command = cmd;
     inSupplier = Optional.ofNullable(in);
     outConsumer = Optional.ofNullable(out);
     errConsumer = Optional.ofNullable(err);
+    environment = env;
+    path = cwd;
     final Executor executor = isNull(exe)
                               ? newCachedThreadPool(withPrefix(THREAD_PREFIX))
                               : exe;
@@ -87,7 +95,7 @@ public class AsyncProcess {
    * Starts the process
    */
   public Result start() throws IOException {
-    final Process exec = Runtime.getRuntime().exec(command);
+    final Process exec = Runtime.getRuntime().exec(command, env(environment), path);
     final Function<Supplier<String>, CompletionStage<Void>> in = redirect(exec.getOutputStream());
     final Function<Consumer<String>, CompletionStage<Void>> out = redirect(exec.getInputStream());
     final Function<Consumer<String>, CompletionStage<Void>> err = redirect(exec.getErrorStream());
@@ -96,6 +104,14 @@ public class AsyncProcess {
     outConsumer.ifPresent(result::out);
     errConsumer.ifPresent(result::err);
     return result;
+  }
+
+  private String[] env(final Map<String, String> env) {
+    return Optional.ofNullable(env)
+        .map(e -> e.entrySet().stream()
+            .map(entry -> entry.getKey() + "=" + entry.getValue())
+            .toArray(String[]::new)
+        ).orElse(null);
   }
 
   private Function<Supplier<String>, CompletionStage<Void>> redirect(final OutputStream stream) {
@@ -202,13 +218,15 @@ public class AsyncProcess {
    * Builder for async process. Shouldn't be created by the user.
    * Rather use {@link AsyncProcess#cmd(String...)}
    */
-  public static class Builder implements Communicable<Builder> {
+  public static class Builder implements Communicable<Builder>, ProcessEnvironment<Builder> {
 
     private Supplier<String> inSupplier;
     private Consumer<String> outConsumer;
     private Consumer<String> errConsumer;
     private String[] command;
     private Executor executor;
+    private Map<String, String> environment;
+    private File cwd;
 
     /**
      * {@inheritDoc}
@@ -258,6 +276,23 @@ public class AsyncProcess {
       return this;
     }
 
+    @Override
+    public Builder env(final Map<String, String> env) {
+      environment = requireNonNull(env);
+      return this;
+    }
+
+    @Override
+    public Builder cwd(final String path) {
+      return cwd(new File(requireNonNull(path)));
+    }
+
+    @Override
+    public Builder cwd(final File path) {
+      cwd = requireNonNull(path);
+      return this;
+    }
+
 
     /**
      * Kicks off the async process.
@@ -265,7 +300,15 @@ public class AsyncProcess {
      * @return a {@link Result} object.
      */
     public Result start() throws IOException {
-      return new AsyncProcess(command, inSupplier, outConsumer, errConsumer, executor).start();
+      return new AsyncProcess(
+          command,
+          inSupplier,
+          outConsumer,
+          errConsumer,
+          environment,
+          cwd,
+          executor
+      ).start();
     }
 
   }
