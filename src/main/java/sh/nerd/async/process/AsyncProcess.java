@@ -122,8 +122,10 @@ public class AsyncProcess {
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream))) {
               produce(supplier, writer);
               future.complete(null);
-            } catch (IOException | UncheckedIOException e) {
+            } catch (IOException e) {
               future.completeExceptionally(e);
+            } catch (UncheckedIOException e) {
+              future.completeExceptionally(e.getCause());
             }
           }
       );
