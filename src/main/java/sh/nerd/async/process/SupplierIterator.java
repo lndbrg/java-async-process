@@ -48,7 +48,7 @@ final class SupplierIterator<T> implements Iterator<T> {
 
   @Override
   public T next() {
-    if (nextElement != null || hasNext()) {
+    if (hasNext()) {
       T element = nextElement;
       nextElement = null;
       return element;
