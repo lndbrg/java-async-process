@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 
 final class SupplierIterator<T> implements Iterator<T> {
 
-  private T nexElement = null;
+  private T nextElement = null;
   private final Supplier<T> supplier;
 
   private SupplierIterator(final Supplier<T> supplier) {
@@ -38,19 +38,19 @@ final class SupplierIterator<T> implements Iterator<T> {
 
   @Override
   public boolean hasNext() {
-    if (nexElement != null) {
+    if (nextElement != null) {
       return true;
     } else {
-      nexElement = supplier.get();
-      return (nexElement != null);
+      nextElement = supplier.get();
+      return (nextElement != null);
     }
   }
 
   @Override
   public T next() {
-    if (nexElement != null || hasNext()) {
-      T element = nexElement;
-      nexElement = null;
+    if (nextElement != null || hasNext()) {
+      T element = nextElement;
+      nextElement = null;
       return element;
     } else {
       throw new NoSuchElementException();
