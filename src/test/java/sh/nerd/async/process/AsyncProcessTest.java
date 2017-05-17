@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static sh.nerd.async.process.AsyncProcess.Builder;
 import static sh.nerd.async.process.AsyncProcess.cmd;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -75,6 +76,8 @@ class AsyncProcessTest {
 
   @Test
   void builderShouldThrowOnNull() {
+    final String s = null;
+    final File f = null;
     assertAll("Builder values can't be set to null",
         () -> assertThrows(NullPointerException.class,
             () -> new Builder().in(null)
@@ -87,6 +90,15 @@ class AsyncProcessTest {
         ),
         () -> assertThrows(NullPointerException.class,
             () -> new Builder().cmd(null)
+        ),
+        () -> assertThrows(NullPointerException.class,
+            () -> new Builder().cwd(s)
+        ),
+        () -> assertThrows(NullPointerException.class,
+            () -> new Builder().cwd(f)
+        ),
+        () -> assertThrows(NullPointerException.class,
+            () -> new Builder().executor(null)
         )
     );
   }

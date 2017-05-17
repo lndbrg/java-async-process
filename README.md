@@ -55,4 +55,4 @@ Todo
 - [x] Give the user the possibility to specify environment through a hashmap
 - [ ] Go through handling of the communication threads and verify the paths
 - [ ] Better documentation
-- [ ] Any other TODOs in the code.
+- [x] Any other TODOs in the code.

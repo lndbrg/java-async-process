@@ -36,6 +36,9 @@ interface Communicable<T> {
    * fed into the buffer of the process, a platform specific new line is added and the buffer
    * is then flushed.
    *
+   * The supllier must block on {@link Supplier#get()} if it's waiting for more data and must
+   * return null when there is no more data to supply.
+   *
    * @param supplier the supplier of the lines.
    * @return an instance of type T
    */

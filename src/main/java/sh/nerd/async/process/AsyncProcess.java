@@ -122,8 +122,10 @@ public class AsyncProcess {
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream))) {
               produce(supplier, writer);
               future.complete(null);
-            } catch (IOException | UncheckedIOException e) {
+            } catch (IOException e) {
               future.completeExceptionally(e);
+            } catch (UncheckedIOException e) {
+              future.completeExceptionally(e.getCause());
             }
           }
       );
@@ -132,10 +134,6 @@ public class AsyncProcess {
   }
 
   private void produce(final Supplier<String> supplier, final BufferedWriter writer) {
-    /*
-    TODO: Document that the user should block their supplier until they have an element and return
-    TODO: null when they no longer wants to supply a value.
-     */
     stream(spliteratorUnknownSize(supplyUntilNull(supplier), ORDERED | NONNULL), false)
         .forEachOrdered(
             string -> {
@@ -284,12 +282,12 @@ public class AsyncProcess {
 
     @Override
     public Builder cwd(final String path) {
-      return cwd(new File(requireNonNull(path)));
+      return cwd(new File(requireNonNull(path, "Path can't be null")));
     }
 
     @Override
     public Builder cwd(final File path) {
-      cwd = requireNonNull(path);
+      cwd = requireNonNull(path, "Path can't be null");
       return this;
     }
 
