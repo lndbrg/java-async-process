@@ -134,10 +134,6 @@ public class AsyncProcess {
   }
 
   private void produce(final Supplier<String> supplier, final BufferedWriter writer) {
-    /*
-    TODO: Document that the user should block their supplier until they have an element and return
-    TODO: null when they no longer wants to supply a value.
-     */
     stream(spliteratorUnknownSize(supplyUntilNull(supplier), ORDERED | NONNULL), false)
         .forEachOrdered(
             string -> {
