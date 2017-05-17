@@ -284,12 +284,12 @@ public class AsyncProcess {
 
     @Override
     public Builder cwd(final String path) {
-      return cwd(new File(requireNonNull(path)));
+      return cwd(new File(requireNonNull(path, "Path can't be null")));
     }
 
     @Override
     public Builder cwd(final File path) {
-      cwd = requireNonNull(path);
+      cwd = requireNonNull(path, "Path can't be null");
       return this;
     }
 
