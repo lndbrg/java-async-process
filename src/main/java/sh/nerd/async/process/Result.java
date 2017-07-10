@@ -39,7 +39,7 @@ import java.util.stream.Stream;
 /**
  * Wrapper for a spawned process.
  */
-class Result implements Communicable<Result> {
+public class Result implements Communicable<Result> {
 
   private final static Consumer<String> NO_OP_CONUMER = ingored -> {
   };
