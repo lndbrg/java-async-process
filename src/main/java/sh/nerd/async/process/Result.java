@@ -39,7 +39,7 @@ import java.util.stream.Stream;
  */
 public class Result implements Communicable<Result> {
 
-  private final static Consumer<String> NO_OP_CONUMER = ingored -> {
+  private final static Consumer<String> NO_OP_CONUMER = ignored -> {
   };
   private final static Supplier<String> NULL_SUPPLIER = () -> null;
 
