@@ -23,10 +23,8 @@ import static java.util.Objects.isNull;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static java.util.stream.Collectors.toList;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
@@ -137,9 +135,11 @@ public class Result implements Communicable<Result> {
       err(NO_OP_CONUMER);
     }
 
-    final List<CompletableFuture<Void>> collect = Stream.of(inRunner, outRunner, errRunner)
-        .map(CompletionStage::toCompletableFuture).collect(toList());
-    return allOf(collect.toArray(new CompletableFuture[collect.size()]));
+    return allOf(
+        Stream.of(inRunner, outRunner, errRunner)
+            .map(CompletionStage::toCompletableFuture)
+            .toArray(CompletableFuture[]::new)
+    );
   }
 
   /**
